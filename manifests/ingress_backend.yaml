@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    kubernetes.io/tls-acme: "false"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  name: intellattract-backend-ingress
+spec:
+  rules:
+  - host: backend.intellattract.ai
+    http:
+      paths:
+      - backend:
+          service:
+            name: intellattract-backend
+            port:
+              number: 5000
+        path: /
+        pathType: ImplementationSpecific
+  tls:
+  - hosts:
+    - backend.intellattract.ai
+    secretName: backend-ingress

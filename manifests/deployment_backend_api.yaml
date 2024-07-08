@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intellattract-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: intellattract-backend
+  template:
+    metadata:
+      labels:
+        app: intellattract-backend
+    spec:
+      containers:
+        - name: intellattract-backend
+          image: 968275953194.dkr.ecr.us-west-2.amazonaws.com/devops-intellattract-api:new
+          ports:
+            - name: api
+              containerPort: 5000
+          command: ["/bin/sh"]
+          args: ["-c", "gunicorn __init__:app -w 2 --threads 2 -b 0.0.0.0:5000"]
+          env:                         # Add ENVs values before applying
+          - name: DB_USER
+            value: ""
+          - name: DB_PW
+            value: ""
+          - name: twilio_account_sid
+            value: ""
+          - name: twilio_auth_token
+            value: ""
+          - name: TWILIO_TWIML_APP_SID
+            value: ""
+          - name: API_KEY
+            value: ""
+          - name: API_SECRET
+            value: ""
+          - name: SPARQL_URI
+            value: ""
+          - name: TWILIO_NUMBER
+            value: ""
+          - name: SENDGRID_API_KEY
+            value: ""
+          - name: MYSQL_HOST
+            value: ""
+          - name: MYSQL_USERNAME
+            value: ""
+          - name: MYSQL_PW
+            value: ""
+          - name: MYSQL_DATABASE
+            value: ""
+          - name: JWT_SECRET_KEY
+            value: ""
+          - name: RABBIT_USER
+            value: ""
+          - name: RABBIT_PW
+            value: ""
+          - name: RABBIT_URI
+            value: ""
+          - name: OPENAI_API_KEY
+            value: ""
+          - name: API_KEY
+            value: ""
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: intellattract-backend
+spec:
+  ports:
+    - port: 5000
+      targetPort: 5000
+  selector:
+    app: intellattract-backend

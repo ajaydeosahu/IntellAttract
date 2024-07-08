@@ -1,0 +1,153 @@
+pipeline {
+    environment {
+        gitCredentials = 'Github-creds'
+        DOCKER_REPO="968275953194.dkr.ecr.us-west-2.amazonaws.com/devops-intellattract-api"
+        DOCKER_REPO_CELERY="968275953194.dkr.ecr.us-west-2.amazonaws.com/devops-intellattract-celery"
+        gitRepository="https://github.com/IntellAttractOrg/IntellAttractAPI.git"   
+        AWS_REGION = "us-west-2"
+        AWS_CREDS = "aws-creds"
+        CLUSTER_NAME = "devops-eks-cluster"
+        DEPLOYMENT_NAME = "intellattract-backend"
+        DEPLOYMENT_CELERY_NAME = "intellattract-celery-worker"
+        DEPLOYMENT_NAMESPACE = "default"
+        GIT_COMMIT_TAG = "${GIT_COMMIT[0..7]}"
+    }
+    options {
+        skipStagesAfterUnstable()
+    }
+  agent {
+    kubernetes {
+        label 'jenkinsrun'
+        defaultContainer 'dind'
+        yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: dind
+    image: squareops/jenkins-build-agent:latest
+    securityContext:
+      privileged: true
+    volumeMounts:
+      - name: dind-storage
+        mountPath: /var/lib/docker
+  volumes:
+    - name: dind-storage
+      emptyDir: {}
+"""
+        }
+      }
+
+    stages {
+        stage('Clone repository') { 
+            steps { 
+                checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: gitRepository,
+                credentialsId: gitCredentials]], branches: [[name: "$GIT_BRANCH"]]],poll: false
+            }
+        }
+    
+        stage('Building image') {
+            steps {
+                container('dind') {
+                dir('.'){
+                    script {
+                        sh "export DB_USER=${env.DB_USER}"
+                        sh "export DB_PW=${env.DB_PW}"
+                        sh "export twilio_account_sid=${env.twilio_account_sid}"
+                        sh "export twilio_auth_token=${env.twilio_auth_token}"
+                        sh "export TWILIO_TWIML_APP_SID=${env.TWILIO_TWIML_APP_SID}"
+                        sh "export API_KEY=${env.API_KEY}"
+                        sh "export API_SECRET=${env.API_SECRET}"
+                        sh "export TWILIO_NUMBER=${env.TWILIO_NUMBER}"
+                        sh "export SENDGRID_API_KEY=${env.SENDGRID_API_KEY}"
+                        sh "export SPARQL_URI=${env.SPARQL_URI}"
+                        sh "export MYSQL_HOST=${env.MYSQL_HOST}"
+                        sh "export MYSQL_USERNAME=${env.MYSQL_USERNAME}"
+                        sh "export MYSQL_PW=${env.MYSQL_PW}"
+                        sh "export MYSQL_DATABASE=${env.MYSQL_DATABASE}"
+                        sh "export JWT_SECRET_KEY=${env.JWT_SECRET_KEY}"
+                        sh "export RABBIT_USER=${env.RABBIT_USER}"
+                        sh "export RABBIT_PW=${env.RABBIT_PW}"
+                        sh "export RABBIT_URI=${env.RABBIT_URI}"
+                        sh "export OPENAI_API_KEY=${env.OPENAI_API_KEY}"
+                        sh "export API_KEY=${env.API_KEY}"
+                        dockerImage = docker.build "${DOCKER_REPO}:${GIT_COMMIT_TAG}"
+                    }
+                }
+                }
+            }
+        }
+
+        stage('Building image for celery') {
+            steps {
+                container('dind') {
+                dir('.'){
+                    script {
+                        sh "export DB_USER=${env.DB_USER}"
+                        sh "export DB_PW=${env.DB_PW}"
+                        sh "export twilio_account_sid=${env.twilio_account_sid}"
+                        sh "export twilio_auth_token=${env.twilio_auth_token}"
+                        sh "export TWILIO_TWIML_APP_SID=${env.TWILIO_TWIML_APP_SID}"
+                        sh "export API_KEY=${env.API_KEY}"
+                        sh "export API_SECRET=${env.API_SECRET}"
+                        sh "export TWILIO_NUMBER=${env.TWILIO_NUMBER}"
+                        sh "export SENDGRID_API_KEY=${env.SENDGRID_API_KEY}"
+                        sh "export SPARQL_URI=${env.SPARQL_URI}"
+                        sh "export MYSQL_HOST=${env.MYSQL_HOST}"
+                        sh "export MYSQL_USERNAME=${env.MYSQL_USERNAME}"
+                        sh "export MYSQL_PW=${env.MYSQL_PW}"
+                        sh "export MYSQL_DATABASE=${env.MYSQL_DATABASE}"
+                        sh "export JWT_SECRET_KEY=${env.JWT_SECRET_KEY}"
+                        sh "export RABBIT_USER=${env.RABBIT_USER}"
+                        sh "export RABBIT_PW=${env.RABBIT_PW}"
+                        sh "export RABBIT_URI=${env.RABBIT_URI}"
+                        sh "export OPENAI_API_KEY=${env.OPENAI_API_KEY}"
+                        def celery = docker.build("${DOCKER_REPO_CELERY}:${GIT_COMMIT_TAG}","-f ${env.WORKSPACE}/celery/Dockerfile .")
+                    }
+                }
+                }
+            }
+        }
+
+        stage('Logging into AWS ECR') {
+            steps {
+                container('dind') {
+                script {
+                    withAWS(credentials: "${AWS_CREDS}") {
+                    sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin 968275953194.dkr.ecr.us-west-2.amazonaws.com"
+                    }       
+                }
+                }
+            }
+        }
+        stage('Pushing Image to ECR') {
+            steps {  
+                container('dind') {
+                script {
+                        sh "docker push ${DOCKER_REPO}:${GIT_COMMIT_TAG}" 
+                        sh "docker tag ${DOCKER_REPO}:${GIT_COMMIT_TAG} ${DOCKER_REPO}:${GIT_BRANCH.split("/")[1]}"
+                        sh "docker push ${DOCKER_REPO}:${GIT_BRANCH.split("/")[1]}"            
+
+                        sh "docker push ${DOCKER_REPO_CELERY}:${GIT_COMMIT_TAG}" 
+                        sh "docker tag ${DOCKER_REPO_CELERY}:${GIT_COMMIT_TAG} ${DOCKER_REPO_CELERY}:${GIT_BRANCH.split("/")[1]}"
+                        sh "docker push ${DOCKER_REPO_CELERY}:${GIT_BRANCH.split("/")[1]}"              
+                }
+                }
+            }
+        }
+        stage('Update Deployment with latest tag') {
+
+            steps {
+                container('dind') {
+                withAWS(credentials: "${AWS_CREDS}") {
+                script {
+                    sh "aws eks --region ${AWS_REGION} update-kubeconfig --name $CLUSTER_NAME"
+                    sh "kubectl --record deployment.apps/$DEPLOYMENT_NAME set image deployment.v1.apps/$DEPLOYMENT_NAME $DEPLOYMENT_NAME=${DOCKER_REPO}:$GIT_COMMIT_TAG -n $DEPLOYMENT_NAMESPACE"
+                    sh "kubectl --record deployment.apps/$DEPLOYMENT_CELERY_NAME set image deployment.v1.apps/$DEPLOYMENT_CELERY_NAME $DEPLOYMENT_CELERY_NAME=${DOCKER_REPO_CELERY}:$GIT_COMMIT_TAG -n $DEPLOYMENT_NAMESPACE"
+                    } 
+                }
+                }
+            }
+        }
+    }
+}

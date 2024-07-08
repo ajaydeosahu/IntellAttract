@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intellattract-virtuosodb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: intellattract-virtuosodb
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: intellattract-virtuosodb
+    spec:
+      containers:
+      - env:
+        - name: DBA_PASSWORD
+          value: ""
+        - name: DAV_PASSWORD
+          value: ""
+        image: 968275953194.dkr.ecr.us-west-2.amazonaws.com/devops-intellattract-virtuoso:v1
+        imagePullPolicy: IfNotPresent
+        name: intellattract-virtuosodb
+        ports:
+        - containerPort: 8890
+          name: http
+          protocol: TCP
+        - containerPort: 1111
+          name: sql
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /var/lib/virtuoso/db
+          name: virtuosodb-data
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: virtuosodb-data
+        persistentVolumeClaim:
+          claimName: virtuosodb-volume
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: intellattract-virtuosodb-mysql
+spec:
+  clusterIP: 
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - port: 1111
+    protocol: TCP
+    targetPort: 1111
+  selector:
+    app: intellattract-virtuosodb
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: intellattract-virtuosodb-ui
+spec:
+  ports:
+  - port: 8890
+    protocol: TCP
+    targetPort: 8890
+  selector:
+    app: intellattract-virtuosodb
+  type: ClusterIP
+
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: virtuosodb-volume
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 80Gi
+  storageClassName: gp2

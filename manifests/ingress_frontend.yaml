@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    kubernetes.io/tls-acme: "false"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  name: intellattract-frontend
+spec:
+  tls:
+  - hosts:
+    - crm2.intellattract.ai
+  rules:
+  - host: crm2.intellattract.ai
+    http:
+      paths:
+      - backend:
+          service:
+            name: intellattract-frontend
+            port:
+              number: 80
+        path: /
+        pathType: Prefix

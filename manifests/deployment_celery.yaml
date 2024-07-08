@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intellattract-celery-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: intellattract-celery-worker
+  template:
+    metadata:
+      labels:
+        app: intellattract-celery-worker
+    spec:
+      containers:
+        - name: intellattract-celery-worker
+          image: 968275953194.dkr.ecr.us-west-2.amazonaws.com/devops-intellattract-celery:new2
+          command: ["/bin/sh"]
+          args:
+            - "-c"
+            - |
+              celery --app=__init__.celery_app worker -l info --uid=nobody --gid=nogroup 
+          env:
+          - name: twilio_account_sid
+            value: ""
+          - name: TWILIO_NUMBER
+            value: ""
+          - name: RABBIT_USER
+            value: ""
+          - name: RABBIT_PW
+            value: ""
+          - name: RABBIT_URI
+            value: ""
+          - name: DB_USER
+            value: ""
+          - name: DB_PW
+            value: ""
+          - name: twilio_auth_token
+            value: ""
+          - name: TWILIO_TWIML_APP_SID
+            value: ""
+          - name: API_KEY
+            value: ""
+          - name: API_SECRET
+            value: ""
+          - name: SPARQL_URI
+            value: ""
+          - name: SENDGRID_API_KEY
+            value: ""
+          - name: MYSQL_HOST
+            value: ""
+          - name: MYSQL_USERNAME
+            value: ""
+          - name: MYSQL_PW
+            value: ""
+          - name: MYSQL_DATABASE
+            value: ""
+          - name: JWT_SECRET_KEY
+            value: ""
+          - name: OPENAI_API_KEY
+            value: ""

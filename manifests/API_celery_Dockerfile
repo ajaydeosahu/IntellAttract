@@ -1,0 +1,12 @@
+FROM python:3.8-slim-buster
+
+# Create a non-root user
+#RUN groupadd -r celeryuser && useradd -r -g celeryuser celeryuser
+
+WORKDIR /app
+
+COPY . .
+
+RUN mkdir -p /var/run/celery /var/log/celery
+RUN chown -R nobody:nogroup /var/run/celery /var/log/celery
+RUN pip install --no-cache-dir -r requirements.txt

@@ -1,0 +1,99 @@
+pipeline {
+    environment {
+        gitCredentials = 'Github-creds'
+        DOCKER_REPO="968275953194.dkr.ecr.us-west-2.amazonaws.com/devops-intellattract-gui"
+        gitRepository="https://github.com/IntellAttractOrg/GUI.git"   
+        AWS_REGION = "us-west-2"
+        AWS_CREDS = "aws-creds"
+        CLUSTER_NAME = "devops-eks-cluster"
+        DEPLOYMENT_NAME = "intellattract-frontend"
+        DEPLOYMENT_NAMESPACE = "default"
+        GIT_COMMIT_TAG = "${GIT_COMMIT[0..7]}"
+    }
+    options {
+        skipStagesAfterUnstable()
+    }
+  agent {
+    kubernetes {
+        label 'jenkinsrun'
+        defaultContainer 'dind'
+        yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: dind
+    image: squareops/jenkins-build-agent:latest
+    securityContext:
+      privileged: true
+    volumeMounts:
+      - name: dind-storage
+        mountPath: /var/lib/docker
+  volumes:
+    - name: dind-storage
+      emptyDir: {}
+"""
+        }
+      }
+
+    stages {
+        stage('Clone repository') { 
+            steps { 
+                checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: gitRepository,
+                credentialsId: gitCredentials]], branches: [[name: "$GIT_BRANCH"]]],poll: false
+            }
+        }
+    
+        stage('Building image') {
+            steps {
+                container('dind') {
+                dir('.'){
+                    script {
+                        sh "touch .env"
+                        sh "echo REACT_APP_API_URI=${env.REACT_APP_API_URI} >> .env"
+                        sh "export REACT_APP_API_URI=${env.REACT_APP_API_URI}"
+                        sh "export PUBLIC_URL=${env.PUBLIC_URL}"
+                        dockerImage = docker.build "${DOCKER_REPO}:latest"
+                    }
+                }
+                }
+            }
+        }
+        stage('Logging into AWS ECR') {
+            steps {
+                container('dind') {
+                script {
+                    withAWS(credentials: "${AWS_CREDS}") {
+                    sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin 968275953194.dkr.ecr.us-west-2.amazonaws.com"
+                    }       
+                }
+                }
+            }
+        }
+        stage('Pushing Image to ECR') {
+            steps {  
+                container('dind') {
+                script {
+                        sh "docker tag ${DOCKER_REPO}:latest ${DOCKER_REPO}:${GIT_COMMIT_TAG}"
+                        sh "docker push ${DOCKER_REPO}:${GIT_COMMIT_TAG}"
+                        sh "docker tag ${DOCKER_REPO}:latest ${DOCKER_REPO}:${GIT_BRANCH.split("/")[1]}"
+                        sh "docker push ${DOCKER_REPO}:${GIT_BRANCH.split("/")[1]}"                        
+                }
+                }
+            }
+        }
+        stage('Update Deployment with latest tag') {
+
+            steps {
+                container('dind') {
+                withAWS(credentials: "${AWS_CREDS}") {
+                script {
+                    sh "aws eks --region ${AWS_REGION} update-kubeconfig --name $CLUSTER_NAME"
+                    sh "kubectl --record deployment.apps/$DEPLOYMENT_NAME set image deployment.v1.apps/$DEPLOYMENT_NAME $DEPLOYMENT_NAME=${DOCKER_REPO}:$GIT_COMMIT_TAG -n $DEPLOYMENT_NAMESPACE"
+                    } 
+                }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: virtuoso-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  # tls:
+  # - hosts:
+  #   - jenkins-sandbox.intellattract.ai
+  #   secretName: jenkins-tls
+  rules:
+  - host: virtuoso-sandbox.intellattract.ai
+    http:
+      paths:
+      - backend:
+          service:
+            name: intellattract-virtuosodb-ui
+            port:
+              number: 8890
+        path: /
+        pathType: ImplementationSpecific

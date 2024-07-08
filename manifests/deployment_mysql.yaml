@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intellattract-mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: intellattract-mysql
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: intellattract-mysql
+    spec:
+      containers:
+      - env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: ""
+        - name: MYSQL_USER
+          value: ""
+        - name: MYSQL_PASSWORD
+          value: ""
+        - name: MYSQL_DATABASE
+          value: ""
+        image: mysql:8.0.30
+        imagePullPolicy: IfNotPresent
+        name: intellattract-mysql
+        ports:
+        - containerPort: 3306
+          name: mysql
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /data
+          name: mysql-data
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: mysql-data
+        persistentVolumeClaim:
+          claimName: mysql-volume
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: intellattract-mysql
+spec:
+  ports:
+  - port: 3306
+    protocol: TCP
+    targetPort: 3306
+  selector:
+    app: intellattract-mysql
+  type: ClusterIP
+
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mysql-volume
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 80Gi
+  storageClassName: gp2
